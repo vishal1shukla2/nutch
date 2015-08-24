@@ -18,17 +18,18 @@ package org.apache.nutch.parse;
 
 // Commons Logging imports
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.nutch.protocol.Content;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.nutch.protocol.Content;
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * A Utility class containing methods to simply perform parsing utilities such
@@ -45,7 +46,7 @@ public class ParseUtil {
   public static final Logger LOG = LoggerFactory.getLogger(ParseUtil.class);
   private ParserFactory parserFactory;
   /** Parser timeout set to 30 sec by default. Set -1 to deactivate **/
-  private int maxParseTime = 30;
+  private int maxParseTime = -1;
   private ExecutorService executorService;
 
   /**
@@ -108,6 +109,47 @@ public class ParseUtil {
         "Unable to successfully parse content")).getEmptyParseResult(
         content.getUrl(), null);
   }
+
+  public List<ParseResult> parseMulti(Content content) throws ParseException {
+    Parser[] parsers = null;
+
+    try {
+      parsers = this.parserFactory.getParsers(content.getContentType(),
+              content.getUrl() != null ? content.getUrl() : "");
+    } catch (ParserNotFound e) {
+      if (LOG.isWarnEnabled()) {
+        LOG.warn("No suitable parser found when trying to parse content "
+                + content.getUrl() + " of type " + content.getContentType());
+      }
+      throw new ParseException(e.getMessage());
+    }
+
+    List<ParseResult> parseResult = null;
+    for (int i = 0; i < parsers.length; i++) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Parsing [" + content.getUrl() + "] with [" + parsers[i]
+                + "]");
+      }
+/*
+      if (maxParseTime != -1)
+        parseResult = runParser(parsers[i], content);
+      else
+*/
+        parseResult = parsers[i].getParseMulti(content);
+
+      if (parseResult != null && !parseResult.isEmpty())
+        return parseResult;
+    }
+
+    if (LOG.isWarnEnabled()) {
+      LOG.warn("Unable to successfully parse content " + content.getUrl()
+              + " of type " + content.getContentType());
+    }
+    return Arrays.asList(new ParseStatus(new ParseException(
+            "Unable to successfully parse content")).getEmptyParseResult(
+            content.getUrl(), null));
+  }
+
 
   /**
    * Method parses a {@link Content} object using the {@link Parser} specified

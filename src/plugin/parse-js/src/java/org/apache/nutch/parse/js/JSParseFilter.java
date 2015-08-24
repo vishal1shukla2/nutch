@@ -16,6 +16,15 @@
  */
 package org.apache.nutch.parse.js;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.nutch.parse.*;
+import org.apache.nutch.protocol.Content;
+import org.apache.nutch.util.NutchConfiguration;
+import org.apache.oro.text.regex.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.*;
+
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -25,35 +34,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.nutch.parse.HTMLMetaTags;
-import org.apache.nutch.parse.HtmlParseFilter;
-import org.apache.nutch.parse.Outlink;
-import org.apache.nutch.parse.Parse;
-import org.apache.nutch.parse.ParseData;
-import org.apache.nutch.parse.ParseImpl;
-import org.apache.nutch.parse.ParseResult;
-import org.apache.nutch.parse.ParseText;
-import org.apache.nutch.parse.ParseStatus;
-import org.apache.nutch.parse.Parser;
-import org.apache.nutch.protocol.Content;
-import org.apache.nutch.util.NutchConfiguration;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.oro.text.regex.MatchResult;
-import org.apache.oro.text.regex.Pattern;
-import org.apache.oro.text.regex.PatternCompiler;
-import org.apache.oro.text.regex.PatternMatcher;
-import org.apache.oro.text.regex.PatternMatcherInput;
-import org.apache.oro.text.regex.Perl5Compiler;
-import org.apache.oro.text.regex.Perl5Matcher;
-import org.w3c.dom.DocumentFragment;
-import org.w3c.dom.Element;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
 /**
  * This class is a heuristic link extractor for JavaScript files and code
@@ -66,6 +46,11 @@ public class JSParseFilter implements HtmlParseFilter, Parser {
   private static final int MAX_TITLE_LEN = 80;
 
   private Configuration conf;
+
+  public List<ParseResult> getParseMulti(Content c) {
+    return null;
+  }
+
 
   public ParseResult filter(Content content, ParseResult parseResult,
       HTMLMetaTags metaTags, DocumentFragment doc) {

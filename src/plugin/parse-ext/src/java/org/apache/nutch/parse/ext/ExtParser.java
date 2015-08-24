@@ -41,6 +41,7 @@ import java.util.Hashtable;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.Charset;
+import java.util.List;
 
 /**
  * A wrapper that invokes external command to do real parsing job.
@@ -65,6 +66,11 @@ public class ExtParser implements Parser {
 
   public ExtParser() {
   }
+
+  public List<ParseResult> getParseMulti(Content c) {
+    return null;
+  }
+
 
   public ParseResult getParse(Content content) {
 

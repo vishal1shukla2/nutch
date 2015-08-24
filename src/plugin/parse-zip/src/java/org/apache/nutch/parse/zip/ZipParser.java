@@ -17,22 +17,16 @@
 
 package org.apache.nutch.parse.zip;
 
-import java.io.ByteArrayInputStream;
-import java.util.ArrayList;
-import java.util.List;
-
+import org.apache.hadoop.conf.Configuration;
+import org.apache.nutch.net.protocols.Response;
+import org.apache.nutch.parse.*;
+import org.apache.nutch.protocol.Content;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.nutch.net.protocols.Response;
-import org.apache.nutch.parse.Outlink;
-import org.apache.nutch.parse.ParseData;
-import org.apache.nutch.parse.ParseImpl;
-import org.apache.nutch.parse.ParseResult;
-import org.apache.nutch.parse.ParseStatus;
-import org.apache.nutch.parse.Parser;
-import org.apache.nutch.protocol.Content;
-import org.apache.hadoop.conf.Configuration;
+import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ZipParser class based on MSPowerPointParser class by Stephan Strittmatter.
@@ -46,6 +40,11 @@ public class ZipParser implements Parser {
   /** Creates a new instance of ZipParser */
   public ZipParser() {
   }
+
+  public List<ParseResult> getParseMulti(Content c) {
+    return null;
+  }
+
 
   public ParseResult getParse(final Content content) {
 

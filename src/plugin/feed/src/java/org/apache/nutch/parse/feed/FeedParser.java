@@ -17,48 +17,35 @@
 package org.apache.nutch.parse.feed;
 
 // JDK imports
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-
-// APACHE imports
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.sun.syndication.feed.synd.*;
+import com.sun.syndication.io.SyndFeedInput;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.util.StringUtils;
-// import org.apache.nutch.indexer.anchor.AnchorIndexingFilter; removed as per NUTCH-1078
 import org.apache.nutch.metadata.Feed;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.net.URLFilters;
 import org.apache.nutch.net.URLNormalizers;
 import org.apache.nutch.net.protocols.Response;
-import org.apache.nutch.parse.Outlink;
-import org.apache.nutch.parse.Parse;
-import org.apache.nutch.parse.ParseData;
-import org.apache.nutch.parse.ParseResult;
-import org.apache.nutch.parse.ParseStatus;
-import org.apache.nutch.parse.ParseText;
-import org.apache.nutch.parse.Parser;
-import org.apache.nutch.parse.ParserFactory;
-import org.apache.nutch.parse.ParserNotFound;
+import org.apache.nutch.parse.*;
 import org.apache.nutch.protocol.Content;
 import org.apache.nutch.util.EncodingDetector;
 import org.apache.nutch.util.NutchConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.Date;
+import java.util.List;
+import java.util.Map.Entry;
+
+// APACHE imports
+// import org.apache.nutch.indexer.anchor.AnchorIndexingFilter; removed as per NUTCH-1078
 // ROME imports
-import com.sun.syndication.feed.synd.SyndCategory;
-import com.sun.syndication.feed.synd.SyndContent;
-import com.sun.syndication.feed.synd.SyndEntry;
-import com.sun.syndication.feed.synd.SyndFeed;
-import com.sun.syndication.feed.synd.SyndPerson;
-import com.sun.syndication.io.SyndFeedInput;
 
 /**
  * 
@@ -90,6 +77,11 @@ public class FeedParser implements Parser {
   private URLFilters filters;
 
   private String defaultEncoding;
+
+  public List<ParseResult> getParseMulti(Content c) {
+    return null;
+  }
+
 
   /**
    * Parses the given feed and extracts out and parsers all linked items within

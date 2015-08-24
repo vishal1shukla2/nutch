@@ -17,27 +17,31 @@
 
 package org.apache.nutch.parse.swf;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.*;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import com.anotherbigidea.flash.interfaces.SWFActionBlock;
+import com.anotherbigidea.flash.interfaces.SWFActions;
+import com.anotherbigidea.flash.interfaces.SWFText;
+import com.anotherbigidea.flash.interfaces.SWFVectors;
+import com.anotherbigidea.flash.readers.SWFReader;
+import com.anotherbigidea.flash.readers.TagParser;
+import com.anotherbigidea.flash.structs.AlphaColor;
+import com.anotherbigidea.flash.structs.Color;
+import com.anotherbigidea.flash.structs.Matrix;
+import com.anotherbigidea.flash.structs.Rect;
+import com.anotherbigidea.flash.writers.SWFActionBlockImpl;
+import com.anotherbigidea.flash.writers.SWFTagTypesImpl;
+import com.anotherbigidea.io.InStream;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.net.protocols.Response;
 import org.apache.nutch.parse.*;
 import org.apache.nutch.protocol.Content;
 import org.apache.nutch.util.NutchConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.hadoop.conf.Configuration;
-
-import com.anotherbigidea.flash.interfaces.*;
-import com.anotherbigidea.flash.readers.*;
-import com.anotherbigidea.flash.structs.*;
-import com.anotherbigidea.flash.writers.SWFActionBlockImpl;
-import com.anotherbigidea.flash.writers.SWFTagTypesImpl;
-import com.anotherbigidea.io.InStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Parser for Flash SWF files. Loosely based on the sample in JavaSWF
@@ -51,6 +55,11 @@ public class SWFParser implements Parser {
 
   public SWFParser() {
   }
+
+  public List<ParseResult> getParseMulti(Content c) {
+    return null;
+  }
+
 
   public void setConf(Configuration conf) {
     this.conf = conf;

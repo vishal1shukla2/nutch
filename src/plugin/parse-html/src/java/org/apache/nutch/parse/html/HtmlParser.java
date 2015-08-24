@@ -17,29 +17,38 @@
 
 package org.apache.nutch.parse.html;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.net.URL;
-import java.net.MalformedURLException;
-import java.nio.charset.Charset;
-import java.io.*;
-import java.util.regex.*;
-
-import org.cyberneko.html.parsers.*;
-import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
-import org.w3c.dom.*;
-import org.apache.html.dom.*;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.Text;
+import org.apache.html.dom.HTMLDocumentImpl;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.metadata.Nutch;
-import org.apache.nutch.protocol.Content;
-import org.apache.hadoop.conf.*;
 import org.apache.nutch.parse.*;
-import org.apache.nutch.util.*;
+import org.apache.nutch.protocol.Content;
+import org.apache.nutch.util.EncodingDetector;
+import org.apache.nutch.util.NutchConfiguration;
+import org.cyberneko.html.parsers.DOMFragmentParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.DOMException;
+import org.w3c.dom.DocumentFragment;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class HtmlParser implements Parser {
   public static final Logger LOG = LoggerFactory
@@ -135,6 +144,22 @@ public class HtmlParser implements Parser {
 
   private String cachingPolicy;
 
+  public List<ParseResult> getParseMulti(Content content) {
+    ParseResult parseResult = getParse(content);
+
+    List<ParseResult> parseResults = new ArrayList<>();
+
+    parseResults.add(parseResult);
+  /*  for(Map.Entry<Text, Parse> parseEntry: parseResult) {
+
+      ParseResult parseResult1 = ParseResult.createParseResult(parseEntry.getKey().toString(),
+              new ParseImpl(parseEntry.getValue().getText(), parseEntry.getValue().getData()));
+      parseResults.add(parseResult1);
+    }*/
+    return parseResults;
+
+  }
+
   public ParseResult getParse(Content content) {
     HTMLMetaTags metaTags = new HTMLMetaTags();
 
@@ -146,8 +171,8 @@ public class HtmlParser implements Parser {
           .getEmptyParseResult(content.getUrl(), getConf());
     }
 
-    String text = "";
-    String title = "";
+    String text;
+    String title;
     Outlink[] outlinks = new Outlink[0];
     Metadata metadata = new Metadata();
 
@@ -171,6 +196,13 @@ public class HtmlParser implements Parser {
         LOG.trace("Parsing...");
       }
       root = parse(input);
+
+      HTMLMetaProcessor.getMetaTags(metaTags, root, base);
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Meta tags for " + base + ": " + metaTags.toString());
+      }
+
+
     } catch (IOException e) {
       return new ParseStatus(e)
           .getEmptyParseResult(content.getUrl(), getConf());
@@ -187,26 +219,69 @@ public class HtmlParser implements Parser {
     }
 
     // get meta directives
-    HTMLMetaProcessor.getMetaTags(metaTags, root, base);
-    if (LOG.isTraceEnabled()) {
-      LOG.trace("Meta tags for " + base + ": " + metaTags.toString());
-    }
+
+
+
+
     // check meta directives
-    if (!metaTags.getNoIndex()) { // okay to index
-      StringBuffer sb = new StringBuffer();
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Getting text...");
+    text = extractText(metaTags, root);
+
+    title = extractTitle(metaTags, root);
+
+    outlinks = extractOutlinks(content, metaTags, base, root);
+
+    ParseStatus status = getParseStatus(metaTags);
+
+  /*  ParseData parseData = new ParseData(status, title, outlinks,
+        content.getMetadata(), metadata);*/
+/*
+    ParseResult parseResult = ParseResult.createParseResult(content.getUrl(),
+        new ParseImpl(text, parseData));
+*/
+
+    ParseResult parseResult = new ParseResult(content.getUrl());
+
+    try {
+
+      XPath xPath = XPathFactory.newInstance().newXPath();
+      NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"Any_13\"]/DIV", root, XPathConstants.NODESET);
+
+      for (int i = 0; i < nodeList.getLength(); ++i) {
+        Node e =  nodeList.item(i);
+        String divText = extractText(metaTags, e);
+        Outlink[] divOutlinks = extractOutlinks(content, metaTags, base, e);
+        //parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(divText), new ParseData(status, title, divOutlinks, content.getMetadata(), metadata));
+        parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(divText), new ParseData(status, title + (i+1), divOutlinks, content.getMetadata(), metadata));
       }
-      utils.getText(sb, root); // extract text
-      text = sb.toString();
-      sb.setLength(0);
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Getting title...");
-      }
-      utils.getTitle(sb, root); // extract title
-      title = sb.toString().trim();
+
+    } catch (XPathExpressionException e) {
+      e.printStackTrace();
     }
 
+
+    // run filters on parse
+    ParseResult filteredParse = this.htmlParseFilters.filter(content,
+        parseResult, metaTags, root);
+    if (metaTags.getNoCache()) { // not okay to cache
+      for (Map.Entry<org.apache.hadoop.io.Text, Parse> entry : filteredParse)
+        entry.getValue().getData().getParseMeta()
+            .set(Nutch.CACHING_FORBIDDEN_KEY, cachingPolicy);
+    }
+    return filteredParse;
+  }
+
+  private ParseStatus getParseStatus(HTMLMetaTags metaTags) {
+    ParseStatus status = new ParseStatus(ParseStatus.SUCCESS);
+    if (metaTags.getRefresh()) {
+      status.setMinorCode(ParseStatus.SUCCESS_REDIRECT);
+      status.setArgs(new String[] { metaTags.getRefreshHref().toString(),
+          Integer.toString(metaTags.getRefreshTime()) });
+    }
+    return status;
+  }
+
+  private Outlink[] extractOutlinks(Content content, HTMLMetaTags metaTags, URL base, Node root) {
+    Outlink[] outlinks = new Outlink[0];
     if (!metaTags.getNoFollow()) { // okay to follow links
       ArrayList<Outlink> l = new ArrayList<Outlink>(); // extract outlinks
       URL baseTag = utils.getBase(root);
@@ -220,27 +295,33 @@ public class HtmlParser implements Parser {
             + content.getUrl());
       }
     }
+    return outlinks;
+  }
 
-    ParseStatus status = new ParseStatus(ParseStatus.SUCCESS);
-    if (metaTags.getRefresh()) {
-      status.setMinorCode(ParseStatus.SUCCESS_REDIRECT);
-      status.setArgs(new String[] { metaTags.getRefreshHref().toString(),
-          Integer.toString(metaTags.getRefreshTime()) });
+  private String extractTitle(HTMLMetaTags metaTags, Node root) {
+    String title = "";
+    if (!metaTags.getNoIndex()) { // okay to index
+      StringBuffer sb = new StringBuffer();
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Getting title...");
+      }
+      utils.getTitle(sb, root); // extract title
+      title = sb.toString().trim();
     }
-    ParseData parseData = new ParseData(status, title, outlinks,
-        content.getMetadata(), metadata);
-    ParseResult parseResult = ParseResult.createParseResult(content.getUrl(),
-        new ParseImpl(text, parseData));
+    return title;
+  }
 
-    // run filters on parse
-    ParseResult filteredParse = this.htmlParseFilters.filter(content,
-        parseResult, metaTags, root);
-    if (metaTags.getNoCache()) { // not okay to cache
-      for (Map.Entry<org.apache.hadoop.io.Text, Parse> entry : filteredParse)
-        entry.getValue().getData().getParseMeta()
-            .set(Nutch.CACHING_FORBIDDEN_KEY, cachingPolicy);
+  private String extractText(HTMLMetaTags metaTags, Node root) {
+    String text = "";
+    if (!metaTags.getNoIndex()) { // okay to index
+      StringBuffer sb = new StringBuffer();
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Getting text...");
+      }
+      utils.getText(sb, root); // extract text
+      text = sb.toString();
     }
-    return filteredParse;
+    return text;
   }
 
   private DocumentFragment parse(InputSource input) throws Exception {
@@ -274,8 +355,8 @@ public class HtmlParser implements Parser {
       parser.setFeature("http://cyberneko.org/html/features/augmentations",
           true);
       parser.setProperty(
-          "http://cyberneko.org/html/properties/default-encoding",
-          defaultCharEncoding);
+              "http://cyberneko.org/html/properties/default-encoding",
+              defaultCharEncoding);
       parser
           .setFeature(
               "http://cyberneko.org/html/features/scanner/ignore-specified-charset",
