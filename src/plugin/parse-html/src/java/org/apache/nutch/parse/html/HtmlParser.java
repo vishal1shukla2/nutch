@@ -17,9 +17,15 @@
 
 package org.apache.nutch.parse.html;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.html.dom.HTMLDocumentImpl;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.metadata.Nutch;
 import org.apache.nutch.parse.*;
@@ -43,6 +49,7 @@ import javax.xml.xpath.XPathFactory;
 import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,6 +77,8 @@ public class HtmlParser implements Parser {
       Pattern.CASE_INSENSITIVE);
 
   private String parserImpl;
+
+  DefaultHttpClient defaultHttpClient = new DefaultHttpClient();
 
   /**
    * Given a <code>byte[]</code> representing an html file of an
@@ -221,8 +230,6 @@ public class HtmlParser implements Parser {
     // get meta directives
 
 
-
-
     // check meta directives
     text = extractText(metaTags, root);
 
@@ -232,26 +239,66 @@ public class HtmlParser implements Parser {
 
     ParseStatus status = getParseStatus(metaTags);
 
-  /*  ParseData parseData = new ParseData(status, title, outlinks,
-        content.getMetadata(), metadata);*/
-/*
+    ParseData parseData = new ParseData(status, title, outlinks,
+        content.getMetadata(), metadata);
     ParseResult parseResult = ParseResult.createParseResult(content.getUrl(),
         new ParseImpl(text, parseData));
-*/
 
-    ParseResult parseResult = new ParseResult(content.getUrl());
+///    ParseResult parseResult = new ParseResult(content.getUrl());
 
     try {
 
       XPath xPath = XPathFactory.newInstance().newXPath();
-      NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"Any_13\"]/DIV", root, XPathConstants.NODESET);
+      //NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"Any_13\"]/DIV", root, XPathConstants.NODESET);
+
+      NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"adminForm\"]/TABLE/TBODY/TR/TD[1]", root, XPathConstants.NODESET);
 
       for (int i = 0; i < nodeList.getLength(); ++i) {
         Node e =  nodeList.item(i);
         String divText = extractText(metaTags, e);
         Outlink[] divOutlinks = extractOutlinks(content, metaTags, base, e);
+
+
+        try {
+          HttpGet getRequest = new HttpGet(
+                  "https://www.googleapis.com/language/translate/v2?key=AIzaSyCJdiVP9lTVwbRV4B7ZAXZ__N2nyz5FP0o&source=ru&target=en&q="+ URLEncoder.encode(divText, "UTF-8"));
+          getRequest.addHeader("accept", "application/json");
+
+          HttpResponse response = defaultHttpClient.execute(getRequest);
+
+          if (response.getStatusLine().getStatusCode() != 200) {
+            throw new RuntimeException("Failed : HTTP error code : "
+                    + response.getStatusLine().getStatusCode());
+          }
+
+          BufferedReader br = new BufferedReader(
+                  new InputStreamReader((response.getEntity().getContent())));
+
+          StringBuilder body = new StringBuilder();
+          String output;
+          while ((output = br.readLine()) != null) {
+            body.append(output);
+          }
+
+          ObjectMapper objectMapper = new ObjectMapper();
+
+          TranslatedText translatedText = objectMapper.readValue(body.toString(), TranslatedText.class);
+
+          String translation = translatedText.getData().getTranslations().get(0).getTranslatedText();
+
+          String unescaped = StringEscapeUtils.unescapeHtml(translation);
+
+          parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(unescaped), new ParseData(status, title + (i+1), divOutlinks, content.getMetadata(), metadata));
+
+        } catch (ClientProtocolException e1) {
+          e1.printStackTrace();
+        } catch (IOException e1) {
+          e1.printStackTrace();
+        }
+
+
         //parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(divText), new ParseData(status, title, divOutlinks, content.getMetadata(), metadata));
-        parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(divText), new ParseData(status, title + (i+1), divOutlinks, content.getMetadata(), metadata));
+
       }
 
     } catch (XPathExpressionException e) {
@@ -340,7 +387,7 @@ public class HtmlParser implements Parser {
     reader.setFeature(org.ccil.cowan.tagsoup.Parser.ignoreBogonsFeature, true);
     reader.setFeature(org.ccil.cowan.tagsoup.Parser.bogonsEmptyFeature, false);
     reader
-        .setProperty("http://xml.org/sax/properties/lexical-handler", builder);
+            .setProperty("http://xml.org/sax/properties/lexical-handler", builder);
     reader.parse(input);
     return frag;
   }

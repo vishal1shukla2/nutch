@@ -1078,7 +1078,7 @@
 
 <property>
   <name>plugin.folders</name>
-  <value>plugins</value>
+  <value>/home/pranav.shukla/workspace/nutch/runtime/local/plugins</value>
   <description>Directories where nutch plugins are located.  Each
   element may be a relative or absolute path.  If absolute, it is used
   as is.  If relative, it is searched for on the classpath.</description>
@@ -1095,7 +1095,8 @@
 
 <property>
   <name>plugin.includes</name>
-  <value>protocol-http|urlfilter-regex|parse-(html|tika)|index-(basic|anchor)|indexer-solr|scoring-opic|urlnormalizer-(pass|regex|basic)</value>
+<!--  <value>protocol-http|urlfilter-regex|parse-(html|tika)|index-(basic|anchor)|indexer-solr|scoring-opic|urlnormalizer-(pass|regex|basic)</value> -->
+  <value>protocol-http|urlfilter-regex|parse-(html|tika)|index-(basic|anchor)|indexer-elastic|scoring-opic|urlnormalizer-(pass|regex|basic)</value>
   <description>Regular expression naming plugin directory names to
   include.  Any plugin not matching this expression is excluded.
   In any case you need at least include the nutch-extensionpoints plugin. By
@@ -1590,7 +1591,7 @@
 
 <property>
   <name>elastic.host</name>
-  <value></value>
+  <value>localhost</value>
   <description>The hostname to send documents to using TransportClient. Either host
   and port must be defined or cluster.</description>
 </property>
@@ -1603,7 +1604,7 @@
 
 <property> 
   <name>elastic.cluster</name>
-  <value></value>
+  <value>pranavelasticsearch</value>
   <description>The cluster name to discover. Either host and potr must be defined
   or cluster.</description>
 </property>

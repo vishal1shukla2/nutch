@@ -5,3 +5,7 @@ conf/slaves
 build/
 runtime/
 logs/
+/bin/
+*.iml
+*.ipr
+*.iws

@@ -115,18 +115,20 @@ public class ParseSegment extends NutchTool implements Tool,
       return;
     }
 
-    List<ParseResult> parseResults = null;
+    //List<ParseResult> parseResults = null;
+    ParseResult parseResult;
     try {
       if (parseUtil == null)
         parseUtil = new ParseUtil(getConf());
-      parseResults = parseUtil.parseMulti(content);
+      //parseResults = parseUtil.parseMulti(content);
+      parseResult = parseUtil.parse(content);
     } catch (Exception e) {
       LOG.warn("Error parsing: " + key + ": "
           + StringUtils.stringifyException(e));
       return;
     }
 
-    for(ParseResult parseResult:parseResults)
+    //for(ParseResult parseResult:parseResults)
     for (Entry<Text, Parse> entry : parseResult) {
       Text url = entry.getKey();
       Parse parse = entry.getValue();
