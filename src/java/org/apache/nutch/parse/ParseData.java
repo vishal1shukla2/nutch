@@ -17,22 +17,27 @@
 
 package org.apache.nutch.parse;
 
-import java.io.*;
-import java.util.*;
-
 import org.apache.commons.cli.Options;
-import org.apache.hadoop.io.*;
-import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.FileSystem;
-
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.ArrayFile;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.VersionMismatchException;
+import org.apache.hadoop.io.VersionedWritable;
+import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.util.NutchConfiguration;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Date;
+
 /**
  * Data extracted from a page's content.
- * 
+ *
  * @see Parse#getData()
  */
 public final class ParseData extends VersionedWritable {
@@ -45,6 +50,11 @@ public final class ParseData extends VersionedWritable {
   private Metadata contentMeta;
   private Metadata parseMeta;
   private ParseStatus status;
+  private String articleTitle;
+  private String articleLink;
+  private Date publishedDate;
+  private String articleContent;
+
   private byte version = VERSION;
 
   public ParseData() {
@@ -111,7 +121,7 @@ public final class ParseData extends VersionedWritable {
    * Get a metadata single value. This method first looks for the metadata value
    * in the parse metadata. If no value is found it the looks for the metadata
    * in the content metadata.
-   * 
+   *
    * @see #getContentMeta()
    * @see #getParseMeta()
    */
@@ -139,6 +149,16 @@ public final class ParseData extends VersionedWritable {
       throw new VersionMismatchException(VERSION, version);
     status = ParseStatus.read(in);
     title = Text.readString(in); // read title
+    articleTitle = Text.readString(in);
+    String publishedDateStr = Text.readString(in);
+    if(!publishedDateStr.equals("null")){
+      publishedDate = new Date((Long.parseLong(publishedDateStr)));
+    }
+    articleLink = Text.readString(in);
+    articleLink = articleLink.equals("null")?null:articleLink;
+    articleContent = Text.readString(in);
+    articleContent = articleContent.equals("null")?null:articleContent;
+    //Text.writeString(out, publishedDate!=null?Long.toString(publishedDate.getTime()):"null");
 
     int numOutlinks = in.readInt();
     outlinks = new Outlink[numOutlinks];
@@ -166,7 +186,10 @@ public final class ParseData extends VersionedWritable {
     out.writeByte(VERSION); // write version
     status.write(out); // write status
     Text.writeString(out, title); // write title
-
+    Text.writeString(out, articleTitle!=null?articleTitle:"null");
+    Text.writeString(out, publishedDate!=null?Long.toString(publishedDate.getTime()):"null");
+    Text.writeString(out, articleLink!=null?articleLink:"null");
+    Text.writeString(out, articleContent!=null?articleContent:"null");
     out.writeInt(outlinks.length); // write outlinks
     for (int i = 0; i < outlinks.length; i++) {
       outlinks[i].write(out);
@@ -252,4 +275,30 @@ public final class ParseData extends VersionedWritable {
     }
   }
 
+    public String getArticleTitle() {
+        return articleTitle;
+    }
+
+    public void setArticleTitle(String articleTitle) {
+   //   parseMeta.add("articleTitle",articleTitle);
+        this.articleTitle = articleTitle;
+    }
+
+    public String getArticleLink() {
+        return articleLink;
+    }
+
+    public void setArticleLink(String articleLink) {
+        this.articleLink = articleLink;
+    }
+
+    public Date getPublishedDate() {
+        return publishedDate;
+    }
+
+    public void setPublishedDate(Date publishedDate) {
+
+      //parseMeta.add("publishedDate",Long.toString(publishedDate.getTime()));
+        this.publishedDate = publishedDate;
+    }
 }

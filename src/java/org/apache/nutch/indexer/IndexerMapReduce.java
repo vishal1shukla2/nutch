@@ -16,29 +16,12 @@
  */
 package org.apache.nutch.indexer;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Iterator;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.Mapper;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reducer;
-import org.apache.hadoop.mapred.Reporter;
-import org.apache.hadoop.mapred.SequenceFileInputFormat;
-import org.apache.nutch.crawl.CrawlDatum;
-import org.apache.nutch.crawl.CrawlDb;
-import org.apache.nutch.crawl.Inlinks;
-import org.apache.nutch.crawl.LinkDb;
-import org.apache.nutch.crawl.NutchWritable;
+import org.apache.hadoop.mapred.*;
+import org.apache.nutch.crawl.*;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.metadata.Nutch;
 import org.apache.nutch.net.URLFilters;
@@ -49,13 +32,21 @@ import org.apache.nutch.parse.ParseImpl;
 import org.apache.nutch.parse.ParseText;
 import org.apache.nutch.scoring.ScoringFilterException;
 import org.apache.nutch.scoring.ScoringFilters;
+import org.apache.nutch.util.HashUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
 
 public class IndexerMapReduce extends Configured implements
-    Mapper<Text, Writable, Text, NutchWritable>,
-    Reducer<Text, NutchWritable, Text, NutchIndexAction> {
+        Mapper<Text, Writable, Text, NutchWritable>,
+        Reducer<Text, NutchWritable, Text, NutchIndexAction> {
 
   public static final Logger LOG = LoggerFactory
-      .getLogger(IndexerMapReduce.class);
+          .getLogger(IndexerMapReduce.class);
 
   public static final String INDEXER_PARAMS = "indexer.additional.params";
   public static final String INDEXER_DELETE = "indexer.delete";
@@ -84,7 +75,7 @@ public class IndexerMapReduce extends Configured implements
     this.scfilters = new ScoringFilters(getConf());
     this.delete = job.getBoolean(INDEXER_DELETE, false);
     this.deleteRobotsNoIndex = job.getBoolean(INDEXER_DELETE_ROBOTS_NOINDEX,
-        false);
+            false);
     this.skip = job.getBoolean(INDEXER_SKIP_NOTMODIFIED, false);
 
     normalize = job.getBoolean(URL_NORMALIZING, false);
@@ -92,7 +83,7 @@ public class IndexerMapReduce extends Configured implements
 
     if (normalize) {
       urlNormalizers = new URLNormalizers(getConf(),
-          URLNormalizers.SCOPE_INDEXER);
+              URLNormalizers.SCOPE_INDEXER);
     }
 
     if (filter) {
@@ -102,10 +93,10 @@ public class IndexerMapReduce extends Configured implements
 
   /**
    * Normalizes and trims extra whitespace from the given url.
-   * 
+   *
    * @param url
    *          The url to normalize.
-   * 
+   *
    * @return The normalized url.
    */
   private String normalizeUrl(String url) {
@@ -119,7 +110,7 @@ public class IndexerMapReduce extends Configured implements
 
         // normalize and trim the url
         normalized = urlNormalizers
-            .normalize(url, URLNormalizers.SCOPE_INDEXER);
+                .normalize(url, URLNormalizers.SCOPE_INDEXER);
         normalized = normalized.trim();
       } catch (Exception e) {
         LOG.warn("Skipping " + url + ":" + e);
@@ -132,10 +123,10 @@ public class IndexerMapReduce extends Configured implements
 
   /**
    * Filters the given url.
-   * 
+   *
    * @param url
    *          The url to filter.
-   * 
+   *
    * @return The filtered url or null.
    */
   private String filterUrl(String url) {
@@ -153,8 +144,8 @@ public class IndexerMapReduce extends Configured implements
   }
 
   public void map(Text key, Writable value,
-      OutputCollector<Text, NutchWritable> output, Reporter reporter)
-      throws IOException {
+                  OutputCollector<Text, NutchWritable> output, Reporter reporter)
+          throws IOException {
 
     String urlString = filterUrl(normalizeUrl(key.toString()));
     if (urlString == null) {
@@ -167,8 +158,8 @@ public class IndexerMapReduce extends Configured implements
   }
 
   public void reduce(Text key, Iterator<NutchWritable> values,
-      OutputCollector<Text, NutchIndexAction> output, Reporter reporter)
-      throws IOException {
+                     OutputCollector<Text, NutchIndexAction> output, Reporter reporter)
+          throws IOException {
     Inlinks inlinks = null;
     CrawlDatum dbDatum = null;
     CrawlDatum fetchDatum = null;
@@ -189,15 +180,15 @@ public class IndexerMapReduce extends Configured implements
             fetchDatum = datum;
           }
         } else if (CrawlDatum.STATUS_LINKED == datum.getStatus()
-            || CrawlDatum.STATUS_SIGNATURE == datum.getStatus()
-            || CrawlDatum.STATUS_PARSE_META == datum.getStatus()) {
+                || CrawlDatum.STATUS_SIGNATURE == datum.getStatus()
+                || CrawlDatum.STATUS_PARSE_META == datum.getStatus()) {
           continue;
         } else {
           throw new RuntimeException("Unexpected status: " + datum.getStatus());
         }
       } else if (value instanceof ParseData) {
         parseData = (ParseData) value;
-
+        LOG.info("INside indexer : Article Title is : "+((ParseData) value).getContentMeta().get("articleTitle"));
         // Handle robots meta? https://issues.apache.org/jira/browse/NUTCH-1434
         if (deleteRobotsNoIndex) {
           // Get the robots meta data
@@ -205,10 +196,10 @@ public class IndexerMapReduce extends Configured implements
 
           // Has it a noindex for this url?
           if (robotsMeta != null
-              && robotsMeta.toLowerCase().indexOf("noindex") != -1) {
+                  && robotsMeta.toLowerCase().indexOf("noindex") != -1) {
             // Delete it!
             NutchIndexAction action = new NutchIndexAction(null,
-                NutchIndexAction.DELETE);
+                    NutchIndexAction.DELETE);
             output.collect(key, action);
             return;
           }
@@ -223,31 +214,31 @@ public class IndexerMapReduce extends Configured implements
     // Whether to delete GONE or REDIRECTS
     if (delete && fetchDatum != null && dbDatum != null) {
       if (fetchDatum.getStatus() == CrawlDatum.STATUS_FETCH_GONE
-          || dbDatum.getStatus() == CrawlDatum.STATUS_DB_GONE) {
+              || dbDatum.getStatus() == CrawlDatum.STATUS_DB_GONE) {
         reporter.incrCounter("IndexerStatus", "Documents deleted", 1);
 
         NutchIndexAction action = new NutchIndexAction(null,
-            NutchIndexAction.DELETE);
+                NutchIndexAction.DELETE);
         output.collect(key, action);
         return;
       }
 
       if (fetchDatum.getStatus() == CrawlDatum.STATUS_FETCH_REDIR_PERM
-          || fetchDatum.getStatus() == CrawlDatum.STATUS_FETCH_REDIR_TEMP
-          || dbDatum.getStatus() == CrawlDatum.STATUS_DB_REDIR_PERM
-          || dbDatum.getStatus() == CrawlDatum.STATUS_DB_REDIR_TEMP) {
+              || fetchDatum.getStatus() == CrawlDatum.STATUS_FETCH_REDIR_TEMP
+              || dbDatum.getStatus() == CrawlDatum.STATUS_DB_REDIR_PERM
+              || dbDatum.getStatus() == CrawlDatum.STATUS_DB_REDIR_TEMP) {
         reporter.incrCounter("IndexerStatus", "Deleted redirects", 1);
         reporter.incrCounter("IndexerStatus", "Perm redirects deleted", 1);
 
         NutchIndexAction action = new NutchIndexAction(null,
-            NutchIndexAction.DELETE);
+                NutchIndexAction.DELETE);
         output.collect(key, action);
         return;
       }
     }
 
     if (fetchDatum == null || dbDatum == null || parseText == null
-        || parseData == null) {
+            || parseData == null) {
       return; // only have inlinks
     }
 
@@ -255,7 +246,7 @@ public class IndexerMapReduce extends Configured implements
     if (delete && dbDatum.getStatus() == CrawlDatum.STATUS_DB_DUPLICATE) {
       reporter.incrCounter("IndexerStatus", "Duplicates deleted", 1);
       NutchIndexAction action = new NutchIndexAction(null,
-          NutchIndexAction.DELETE);
+              NutchIndexAction.DELETE);
       output.collect(key, action);
       return;
     }
@@ -267,12 +258,34 @@ public class IndexerMapReduce extends Configured implements
     }
 
     if (!parseData.getStatus().isSuccess()
-        || fetchDatum.getStatus() != CrawlDatum.STATUS_FETCH_SUCCESS) {
+            || fetchDatum.getStatus() != CrawlDatum.STATUS_FETCH_SUCCESS) {
       return;
     }
 
     NutchDocument doc = new NutchDocument();
+
     doc.add("id", key.toString());
+    String articleTitle = parseData.getArticleTitle();
+    if("http://www.ru-pilot.org/index.php/88-news?limitstart=0".equals(key) || articleTitle.equals("null")){
+      return;
+    }
+
+      String checksum = HashUtil.generateHash(articleTitle);
+      doc.add("articleTitle",articleTitle);
+      doc.add("checksum",checksum);
+
+
+
+      String articleLink = parseData.getArticleLink().equals("null")?null:parseData.getArticleLink();
+    //if(articleLink!=null) {
+      doc.add("articleLink", articleLink);
+    //}
+
+    //String publishedDateStr = parse.getData().getParseMeta().get("publishedDate");
+    Date publishedDate = parseData.getPublishedDate();
+    if(publishedDate!=null)
+      doc.add("publishedDate",publishedDate);
+
 
     final Metadata metadata = parseData.getContentMeta();
 
@@ -283,11 +296,12 @@ public class IndexerMapReduce extends Configured implements
     doc.add("digest", metadata.get(Nutch.SIGNATURE_KEY));
 
     final Parse parse = new ParseImpl(parseText, parseData);
+
     try {
       // extract information from dbDatum and pass it to
       // fetchDatum so that indexing filters can use it
       final Text url = (Text) dbDatum.getMetaData().get(
-          Nutch.WRITABLE_REPR_URL_KEY);
+              Nutch.WRITABLE_REPR_URL_KEY);
       if (url != null) {
         // Representation URL also needs normalization and filtering.
         // If repr URL is excluded by filters we still accept this document
@@ -319,7 +333,7 @@ public class IndexerMapReduce extends Configured implements
     // run scoring filters
     try {
       boost = this.scfilters.indexerScore(key, doc, dbDatum, fetchDatum, parse,
-          inlinks, boost);
+              inlinks, boost);
     } catch (final ScoringFilterException e) {
       if (LOG.isWarnEnabled()) {
         LOG.warn("Error calculating score " + key + ": " + e);
@@ -341,7 +355,7 @@ public class IndexerMapReduce extends Configured implements
   }
 
   public static void initMRJob(Path crawlDb, Path linkDb,
-      Collection<Path> segments, JobConf job) {
+                               Collection<Path> segments, JobConf job) {
 
     LOG.info("IndexerMapReduce: crawldb: " + crawlDb);
 
@@ -351,9 +365,9 @@ public class IndexerMapReduce extends Configured implements
     for (final Path segment : segments) {
       LOG.info("IndexerMapReduces: adding segment: " + segment);
       FileInputFormat.addInputPath(job, new Path(segment,
-          CrawlDatum.FETCH_DIR_NAME));
+              CrawlDatum.FETCH_DIR_NAME));
       FileInputFormat.addInputPath(job, new Path(segment,
-          CrawlDatum.PARSE_DIR_NAME));
+              CrawlDatum.PARSE_DIR_NAME));
       FileInputFormat.addInputPath(job, new Path(segment, ParseData.DIR_NAME));
       FileInputFormat.addInputPath(job, new Path(segment, ParseText.DIR_NAME));
     }

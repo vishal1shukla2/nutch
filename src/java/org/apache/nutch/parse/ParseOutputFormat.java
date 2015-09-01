@@ -40,6 +40,7 @@ import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -262,8 +263,15 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
 
         Outlink[] filteredLinks = outlinkList.toArray(new Outlink[outlinkList
             .size()]);
+        String articleTitle=parseData.getArticleTitle();
+        String articleLink=parseData.getArticleLink();
+        Date date = parseData.getPublishedDate();
         parseData = new ParseData(parseData.getStatus(), parseData.getTitle(),
             filteredLinks, parseData.getContentMeta(), parseData.getParseMeta());
+        parseData.setArticleTitle(articleTitle);
+        parseData.setArticleLink(articleLink);
+        parseData.setPublishedDate(date);
+
         dataOut.append(key, parseData);
         if (!parse.isCanonical()) {
           CrawlDatum datum = new CrawlDatum();

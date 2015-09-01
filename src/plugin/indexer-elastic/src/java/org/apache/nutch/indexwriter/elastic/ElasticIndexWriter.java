@@ -17,13 +17,6 @@
 
 package org.apache.nutch.indexwriter.elastic;
 
-import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.JobConf;
@@ -45,6 +38,15 @@ import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.node.Node;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 
 /**
  */
@@ -71,6 +73,8 @@ public class ElasticIndexWriter implements IndexWriter {
   private int bulkDocs = 0;
   private int bulkLength = 0;
   private boolean createNewBulk = false;
+  private ElasticTemplate template;
+  private Set<String> checksums = new HashSet<String>();
 
   @Override
   public void open(JobConf job, String name) throws IOException {
@@ -119,20 +123,34 @@ public class ElasticIndexWriter implements IndexWriter {
         DEFAULT_MAX_BULK_DOCS);
     maxBulkLength = job.getInt(ElasticConstants.MAX_BULK_LENGTH,
         DEFAULT_MAX_BULK_LENGTH);
+    //client.prepareIndex(defaultIndex,"doc").execute().actionGet();
+
   }
 
   @Override
   public void write(NutchDocument doc) throws IOException {
     String id = (String) doc.getFieldValue("id");
     String type = doc.getDocumentMeta().get("type");
+    String checksum = "";
     if (type == null)
       type = "doc";
-    IndexRequestBuilder request = client.prepareIndex(defaultIndex, type, id);
 
+    IndexRequestBuilder request = client.prepareIndex(defaultIndex, type, id);
+    if(template==null){
+      template = new ElasticTemplate(client,defaultIndex);
+    }
     Map<String, Object> source = new HashMap<String, Object>();
 
     // Loop through all fields of this doc
     for (String fieldName : doc.getFieldNames()) {
+      if(fieldName.equals("checksum")){
+        LOG.info("Checksum already exists");
+        checksum = (String)doc.getFieldValue(fieldName);
+        if(template.existsChecksum(checksum))
+          return;
+      }else{
+        LOG.info("Checksum doesn't exist");
+      }
       if (doc.getField(fieldName).getValues().size() > 1) {
         source.put(fieldName, doc.getFieldValue(fieldName));
         // Loop through the values to keep track of the size of this
@@ -142,15 +160,25 @@ public class ElasticIndexWriter implements IndexWriter {
         }
       } else {
         source.put(fieldName, doc.getFieldValue(fieldName));
-        bulkLength += doc.getFieldValue(fieldName).toString().length();
+        if(doc.getFieldValue(fieldName)!=null)
+          bulkLength += doc.getFieldValue(fieldName).toString().length();
       }
     }
     request.setSource(source);
 
+
+    if(checksums.contains(checksum)){
+      // bulk request itself already contains the same doc
+      return;
+    }
+
     // Add this indexing request to a bulk request
+    checksums.add(checksum);
     bulk.add(request);
     indexedDocs++;
     bulkDocs++;
+
+
 
     if (bulkDocs >= maxBulkDocs || bulkLength >= maxBulkLength) {
       LOG.info("Processing bulk request [docs = " + bulkDocs + ", length = "
@@ -217,6 +245,7 @@ public class ElasticIndexWriter implements IndexWriter {
       bulk = client.prepareBulk();
       bulkDocs = 0;
       bulkLength = 0;
+      checksums = new HashSet<>();
     }
   }
 

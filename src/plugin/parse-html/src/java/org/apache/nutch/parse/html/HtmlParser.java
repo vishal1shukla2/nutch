@@ -51,7 +51,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -59,7 +61,7 @@ import java.util.regex.Pattern;
 
 public class HtmlParser implements Parser {
   public static final Logger LOG = LoggerFactory
-      .getLogger("org.apache.nutch.parse.html");
+          .getLogger("org.apache.nutch.parse.html");
 
   // I used 1000 bytes at first, but found that some documents have
   // meta tag well past the first 1000 bytes.
@@ -68,13 +70,13 @@ public class HtmlParser implements Parser {
 
   // NUTCH-1006 Meta equiv with single quotes not accepted
   private static Pattern metaPattern = Pattern.compile(
-      "<meta\\s+([^>]*http-equiv=(\"|')?content-type(\"|')?[^>]*)>",
-      Pattern.CASE_INSENSITIVE);
+          "<meta\\s+([^>]*http-equiv=(\"|')?content-type(\"|')?[^>]*)>",
+          Pattern.CASE_INSENSITIVE);
   private static Pattern charsetPattern = Pattern.compile(
-      "charset=\\s*([a-z][_\\-0-9a-z]*)", Pattern.CASE_INSENSITIVE);
+          "charset=\\s*([a-z][_\\-0-9a-z]*)", Pattern.CASE_INSENSITIVE);
   private static Pattern charsetPatternHTML5 = Pattern.compile(
-      "<meta\\s+charset\\s*=\\s*[\"']?([a-z][_\\-0-9a-z]*)[^>]*>",
-      Pattern.CASE_INSENSITIVE);
+          "<meta\\s+charset\\s*=\\s*[\"']?([a-z][_\\-0-9a-z]*)[^>]*>",
+          Pattern.CASE_INSENSITIVE);
 
   private String parserImpl;
 
@@ -92,7 +94,7 @@ public class HtmlParser implements Parser {
    * http://www.w3.org/International/questions/qa-html-encoding-declarations,
    * http://www.w3.org/TR/2011/WD-html5-diff-20110405/#character-encoding, and
    * http://www.w3.org/TR/REC-xml/#sec-guessing
-   * 
+   *
    * @param content
    *          <code>byte[]</code> representation of an html file
    */
@@ -129,7 +131,7 @@ public class HtmlParser implements Parser {
     if (encoding == null) {
       // check for BOM
       if (content.length >= 3 && content[0] == (byte) 0xEF
-          && content[1] == (byte) 0xBB && content[2] == (byte) 0xBF) {
+              && content[1] == (byte) 0xBB && content[2] == (byte) 0xBF) {
         encoding = "UTF-8";
       } else if (content.length >= 2) {
         if (content[0] == (byte) 0xFF && content[1] == (byte) 0xFE) {
@@ -177,7 +179,7 @@ public class HtmlParser implements Parser {
       base = new URL(content.getBaseUrl());
     } catch (MalformedURLException e) {
       return new ParseStatus(e)
-          .getEmptyParseResult(content.getUrl(), getConf());
+              .getEmptyParseResult(content.getUrl(), getConf());
     }
 
     String text;
@@ -190,7 +192,7 @@ public class HtmlParser implements Parser {
     try {
       byte[] contentInOctets = content.getContent();
       InputSource input = new InputSource(new ByteArrayInputStream(
-          contentInOctets));
+              contentInOctets));
 
       EncodingDetector detector = new EncodingDetector(conf);
       detector.autoDetectClues(content, true);
@@ -214,17 +216,17 @@ public class HtmlParser implements Parser {
 
     } catch (IOException e) {
       return new ParseStatus(e)
-          .getEmptyParseResult(content.getUrl(), getConf());
+              .getEmptyParseResult(content.getUrl(), getConf());
     } catch (DOMException e) {
       return new ParseStatus(e)
-          .getEmptyParseResult(content.getUrl(), getConf());
+              .getEmptyParseResult(content.getUrl(), getConf());
     } catch (SAXException e) {
       return new ParseStatus(e)
-          .getEmptyParseResult(content.getUrl(), getConf());
+              .getEmptyParseResult(content.getUrl(), getConf());
     } catch (Exception e) {
       LOG.error("Error: ", e);
       return new ParseStatus(e)
-          .getEmptyParseResult(content.getUrl(), getConf());
+              .getEmptyParseResult(content.getUrl(), getConf());
     }
 
     // get meta directives
@@ -240,81 +242,76 @@ public class HtmlParser implements Parser {
     ParseStatus status = getParseStatus(metaTags);
 
     ParseData parseData = new ParseData(status, title, outlinks,
-        content.getMetadata(), metadata);
+            content.getMetadata(), metadata);
     ParseResult parseResult = ParseResult.createParseResult(content.getUrl(),
-        new ParseImpl(text, parseData));
+            new ParseImpl(text, parseData));
 
 ///    ParseResult parseResult = new ParseResult(content.getUrl());
-
-    try {
-
-      XPath xPath = XPathFactory.newInstance().newXPath();
-      //NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"Any_13\"]/DIV", root, XPathConstants.NODESET);
-
-      NodeList nodeList = (NodeList) xPath.evaluate("//*[@id=\"adminForm\"]/TABLE/TBODY/TR/TD[1]", root, XPathConstants.NODESET);
-
-      for (int i = 0; i < nodeList.getLength(); ++i) {
-        Node e =  nodeList.item(i);
-        String divText = extractText(metaTags, e);
-        Outlink[] divOutlinks = extractOutlinks(content, metaTags, base, e);
-
-
-        try {
-          HttpGet getRequest = new HttpGet(
-                  "https://www.googleapis.com/language/translate/v2?key=AIzaSyCJdiVP9lTVwbRV4B7ZAXZ__N2nyz5FP0o&source=ru&target=en&q="+ URLEncoder.encode(divText, "UTF-8"));
-          getRequest.addHeader("accept", "application/json");
-
-          HttpResponse response = defaultHttpClient.execute(getRequest);
-
-          if (response.getStatusLine().getStatusCode() != 200) {
-            throw new RuntimeException("Failed : HTTP error code : "
-                    + response.getStatusLine().getStatusCode());
-          }
-
-          BufferedReader br = new BufferedReader(
-                  new InputStreamReader((response.getEntity().getContent())));
-
-          StringBuilder body = new StringBuilder();
-          String output;
-          while ((output = br.readLine()) != null) {
-            body.append(output);
-          }
-
-          ObjectMapper objectMapper = new ObjectMapper();
-
-          TranslatedText translatedText = objectMapper.readValue(body.toString(), TranslatedText.class);
-
-          String translation = translatedText.getData().getTranslations().get(0).getTranslatedText();
-
-          String unescaped = StringEscapeUtils.unescapeHtml(translation);
-
-          parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(unescaped), new ParseData(status, title + (i+1), divOutlinks, content.getMetadata(), metadata));
-
-        } catch (ClientProtocolException e1) {
-          e1.printStackTrace();
-        } catch (IOException e1) {
-          e1.printStackTrace();
-        }
-
-
-        //parseResult.put(new Text(content.getUrl()+"#div"+(i+1)), new ParseText(divText), new ParseData(status, title, divOutlinks, content.getMetadata(), metadata));
-
-      }
-
-    } catch (XPathExpressionException e) {
-      e.printStackTrace();
+    ArticleParser parser = new ArticleParser(utils);
+    List<Article> articles = new ArrayList<>();
+    if(parser.isParsable(root)){
+      articles = parser.parseArticles(root);
     }
-
+    int i=0;
+    for(Article article:articles){
+      Outlink[] divOutlinks = extractOutlinks(content, metaTags, base, article.getArticleTitleNode());
+      String translatedText = article.getArticleTitle();
+      try {
+        translatedText = translateText(article.getArticleTitle());
+      } catch (IOException e) {
+        LOG.error("Error while  translating article");
+      }
+        ParseData parsedData= new ParseData(status, title + (i+1), divOutlinks, content.getMetadata(), metadata);
+        parsedData.setArticleTitle(translatedText);
+        parsedData.setArticleLink(article.getArticleLink());
+        parsedData.setPublishedDate(article.getPublishedDate());
+        parseResult.put(new Text("http://"+"article"+(i+1)+".dummy."+Math.random()), new ParseText(translatedText), parsedData);
+        LOG.info("Parsed article : "+(i+1));
+      i++;
+    }
 
     // run filters on parse
     ParseResult filteredParse = this.htmlParseFilters.filter(content,
-        parseResult, metaTags, root);
+            parseResult, metaTags, root);
     if (metaTags.getNoCache()) { // not okay to cache
       for (Map.Entry<org.apache.hadoop.io.Text, Parse> entry : filteredParse)
         entry.getValue().getData().getParseMeta()
-            .set(Nutch.CACHING_FORBIDDEN_KEY, cachingPolicy);
+                .set(Nutch.CACHING_FORBIDDEN_KEY, cachingPolicy);
     }
     return filteredParse;
+  }
+
+  private String translateText(String titleText) throws IOException {
+    HttpGet getRequest = new HttpGet(
+            "https://www.googleapis.com/language/translate/v2?key=AIzaSyCJdiVP9lTVwbRV4B7ZAXZ__N2nyz5FP0o&source=ru&target=en&q="+ URLEncoder.encode(titleText, "UTF-8"));
+    getRequest.addHeader("accept", "application/json");
+
+    HttpResponse response = defaultHttpClient.execute(getRequest);
+
+    if (response.getStatusLine().getStatusCode() != 200) {
+      throw new RuntimeException("Failed : HTTP error code : "
+              + response.getStatusLine().getStatusCode());
+    }
+
+    BufferedReader br = new BufferedReader(
+            new InputStreamReader((response.getEntity().getContent())));
+
+    StringBuilder body = new StringBuilder();
+    String output;
+    while ((output = br.readLine()) != null) {
+      body.append(output);
+    }
+
+    StringBuilder hashSource = new StringBuilder();
+    hashSource.append(body.toString());
+
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    TranslatedText translatedText = objectMapper.readValue(body.toString(), TranslatedText.class);
+
+    String translation = translatedText.getData().getTranslations().get(0).getTranslatedText();
+
+    return StringEscapeUtils.unescapeHtml(translation);
   }
 
   private ParseStatus getParseStatus(HTMLMetaTags metaTags) {
@@ -322,7 +319,7 @@ public class HtmlParser implements Parser {
     if (metaTags.getRefresh()) {
       status.setMinorCode(ParseStatus.SUCCESS_REDIRECT);
       status.setArgs(new String[] { metaTags.getRefreshHref().toString(),
-          Integer.toString(metaTags.getRefreshTime()) });
+              Integer.toString(metaTags.getRefreshTime()) });
     }
     return status;
   }
@@ -339,7 +336,7 @@ public class HtmlParser implements Parser {
       outlinks = l.toArray(new Outlink[l.size()]);
       if (LOG.isTraceEnabled()) {
         LOG.trace("found " + outlinks.length + " outlinks in "
-            + content.getUrl());
+                + content.getUrl());
       }
     }
     return outlinks;
@@ -396,27 +393,27 @@ public class HtmlParser implements Parser {
     DOMFragmentParser parser = new DOMFragmentParser();
     try {
       parser
-          .setFeature(
-              "http://cyberneko.org/html/features/scanner/allow-selfclosing-iframe",
-              true);
+              .setFeature(
+                      "http://cyberneko.org/html/features/scanner/allow-selfclosing-iframe",
+                      true);
       parser.setFeature("http://cyberneko.org/html/features/augmentations",
-          true);
+              true);
       parser.setProperty(
               "http://cyberneko.org/html/properties/default-encoding",
               defaultCharEncoding);
       parser
-          .setFeature(
-              "http://cyberneko.org/html/features/scanner/ignore-specified-charset",
-              true);
+              .setFeature(
+                      "http://cyberneko.org/html/features/scanner/ignore-specified-charset",
+                      true);
       parser
-          .setFeature(
-              "http://cyberneko.org/html/features/balance-tags/ignore-outside-content",
-              false);
+              .setFeature(
+                      "http://cyberneko.org/html/features/balance-tags/ignore-outside-content",
+                      false);
       parser.setFeature(
-          "http://cyberneko.org/html/features/balance-tags/document-fragment",
-          true);
+              "http://cyberneko.org/html/features/balance-tags/document-fragment",
+              true);
       parser.setFeature("http://cyberneko.org/html/features/report-errors",
-          LOG.isTraceEnabled());
+              LOG.isTraceEnabled());
     } catch (SAXException e) {
     }
     // convert Document to DocumentFragment
@@ -435,7 +432,7 @@ public class HtmlParser implements Parser {
           break;
         if (LOG.isInfoEnabled()) {
           LOG.info(" - new frag, " + frag.getChildNodes().getLength()
-              + " nodes.");
+                  + " nodes.");
         }
         res.appendChild(frag);
       }
@@ -458,8 +455,8 @@ public class HtmlParser implements Parser {
     HtmlParser parser = new HtmlParser();
     parser.setConf(conf);
     Parse parse = parser.getParse(
-        new Content(url, url, bytes, "text/html", new Metadata(), conf)).get(
-        url);
+            new Content(url, url, bytes, "text/html", new Metadata(), conf)).get(
+            url);
     System.out.println("data: " + parse.getData());
 
     System.out.println("text: " + parse.getText());
@@ -471,10 +468,10 @@ public class HtmlParser implements Parser {
     this.htmlParseFilters = new HtmlParseFilters(getConf());
     this.parserImpl = getConf().get("parser.html.impl", "neko");
     this.defaultCharEncoding = getConf().get(
-        "parser.character.encoding.default", "windows-1252");
+            "parser.character.encoding.default", "windows-1252");
     this.utils = new DOMContentUtils(conf);
     this.cachingPolicy = getConf().get("parser.caching.forbidden.policy",
-        Nutch.CACHING_FORBIDDEN_CONTENT);
+            Nutch.CACHING_FORBIDDEN_CONTENT);
   }
 
   public Configuration getConf() {
